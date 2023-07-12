@@ -526,7 +526,7 @@ model = FOGModel()
 model.build(input_shape=(GPU_BATCH_SIZE, CFG['block_size'] // CFG['patch_size'], CFG['patch_size']*3))
 model.load_weights('/kaggle/input/my-fog-dataset/LSTM_5.h5')
 
-w = 0.1
+w = 0.2
 for Id in tsfog_ids:
     targets = PredictionFnCallback_tdcs_1(prediction_ids=[Id], model=model).prediction()
     submission = pd.DataFrame({'Id': (targets['Id'].values + '_' + targets['Time'].astype('str')).values,
@@ -537,92 +537,6 @@ for Id in tsfog_ids:
     
     all_submissions.append(submission)
 
-
-'''
-============================================================================================================================================================
-tdcsfog model_6
-============================================================================================================================================================
-'''
-CFG = {'TPU': 0, 
-       'block_size': 15552, 
-       'block_stride': 15552//32,
-       'patch_size': 18, 
-
-       'fog_model_dim': 256,
-       'fog_model_num_heads': 6,
-       'fog_model_num_encoder_layers': 4,
-       'fog_model_num_lstm_layers': 3,
-       'fog_model_first_dropout': 0.1,
-       'fog_model_encoder_dropout': 0.1,
-       'fog_model_mha_dropout': 0.0,
-      }
-
-assert CFG['block_size'] % CFG['patch_size'] == 0
-assert CFG['block_size'] % CFG['block_stride'] == 0
-
-GPU_BATCH_SIZE = 16
-TPU_BATCH_SIZE = GPU_BATCH_SIZE*8
-
-# EncoderLayer class overloading
-class EncoderLayer(tf.keras.layers.Layer):
-    def __init__(self):
-        super().__init__()
-        
-        self.mha = tf.keras.layers.MultiHeadAttention(num_heads=CFG['fog_model_num_heads'], key_dim=CFG['fog_model_dim'], dropout=CFG['fog_model_mha_dropout'])
-        
-        self.add = tf.keras.layers.Add()
-        
-        self.layernorm = tf.keras.layers.LayerNormalization()
-        
-        # FC model changed
-        self.seq = tf.keras.Sequential([tf.keras.layers.Dense(CFG['fog_model_dim'], activation='relu'), 
-                                        tf.keras.layers.Dropout(CFG['fog_model_encoder_dropout']), 
-                                        tf.keras.layers.Dense(CFG['fog_model_dim'], activation='relu'), 
-                                        tf.keras.layers.Dropout(CFG['fog_model_encoder_dropout']),
-                                        tf.keras.layers.Dense(CFG['fog_model_dim']), 
-                                        tf.keras.layers.Dropout(CFG['fog_model_encoder_dropout']), 
-                                       ])
-        
-    def call(self, x):
-        attn_output = self.mha(query=x, key=x, value=x)
-        x = self.add([x, attn_output])
-        x = self.layernorm(x)
-        x = self.add([x, self.seq(x)])
-        x = self.layernorm(x)
-        
-        return x
-
-# final model changed
-class FOGModel_tdcs_6(tf.keras.Model):
-    def __init__(self):
-        super().__init__()
-        
-        self.encoder = FOGEncoder()
-        self.least_linear = tf.keras.layers.Dense(100)
-        self.last_linear = tf.keras.layers.Dense(3) 
-        
-    def call(self, x):
-        x = self.encoder(x)
-        x = self.least_linear(x)
-        x = self.last_linear(x)
-        x = tf.nn.sigmoid(x)
-        
-        return x
-
-model = FOGModel_tdcs_6()
-model.build(input_shape=(GPU_BATCH_SIZE, CFG['block_size'] // CFG['patch_size'], CFG['patch_size']*3))
-model.load_weights('/kaggle/input/my-fog-dataset/LSTM_6.h5')
-
-w = 0.1
-for Id in tsfog_ids:
-    targets = PredictionFnCallback_tdcs_1(prediction_ids=[Id], model=model).prediction()
-    submission = pd.DataFrame({'Id': (targets['Id'].values + '_' + targets['Time'].astype('str')).values,
-                               'StartHesitation': targets['StartHesitation_prediction'].values*0,
-                               'Turn': targets['Turn_prediction'].values*w,
-                               'Walking': targets['Walking_prediction'].values*w,
-                              })
-    
-    all_submissions.append(submission)
 
 # ----------------------------------------------------------------------------------------------------------------------------------------------------------------
 # defog
@@ -708,7 +622,7 @@ class FOGModel_dense_4(tf.keras.Model):
 
 '''
 ============================================================================================================================================================
-defog model_7
+defog model_6
 ============================================================================================================================================================
 ''' 
 CFG = {'TPU': 0,
@@ -732,7 +646,7 @@ GPU_BATCH_SIZE = 4
 TPU_BATCH_SIZE = GPU_BATCH_SIZE*8
 
 
-class PredictionFnCallback_de_7(tf.keras.callbacks.Callback):
+class PredictionFnCallback_de_6(tf.keras.callbacks.Callback):
     
     def __init__(self, prediction_ids, model=None, verbose=0):
         
@@ -813,7 +727,7 @@ class PredictionFnCallback_de_7(tf.keras.callbacks.Callback):
         return targets
 
 
-WEIGHTS = '/kaggle/input/my-fog-dataset/LSTM_7.h5'
+WEIGHTS = '/kaggle/input/my-fog-dataset/LSTM_6.h5'
 
 model = FOGModel_dense_4()
 model.build(input_shape=(GPU_BATCH_SIZE, CFG['block_size'] // CFG['patch_size'], CFG['patch_size']*3))
@@ -821,7 +735,7 @@ if len(WEIGHTS): model.load_weights(WEIGHTS)
 
 w = 0.3
 for Id in defog_ids:
-    targets = PredictionFnCallback_de_7(prediction_ids=[Id], model=model).prediction()
+    targets = PredictionFnCallback_de_6(prediction_ids=[Id], model=model).prediction()
     submission = pd.DataFrame({'Id': (targets['Id'].values + '_' + targets['Time'].astype('str')).values,
                                'StartHesitation': targets['StartHesitation_prediction'].values*w,
                                'Turn': targets['Turn_prediction'].values*w,
@@ -832,7 +746,7 @@ for Id in defog_ids:
 
 '''
 ============================================================================================================================================================
-defog model_8
+defog model_7
 ============================================================================================================================================================
 '''
 SUB_PATH = "/kaggle/input/tlvmc-parkinsons-freezing-gait-prediction/sample_submission.csv"
@@ -842,7 +756,7 @@ DEFOG_DATA_PATH = "/kaggle/input/tlvmc-parkinsons-freezing-gait-prediction/test/
 device = torch.device('cpu')
 bs = 32
 
-defog_path8 = [f"/kaggle/input/my-fog-dataset/GRU group/{i}.pth" for i in range(5)]
+defog_path8 = [f"/kaggle/input/my-fog-dataset/{i}.pth" for i in range(5)]
 
 def preprocess(numerical_array, 
                mask_array,
@@ -960,13 +874,13 @@ def make_pred(test_loader,model):
 
 sub = pd.read_csv(SUB_PATH)
 
-defog_model_list8 = []
+defog_model_list7 = []
 for i in defog_path8:
     model = DefogRnnModel()
     model.load_state_dict(torch.load(i))
     model = model.to(device)
     model.eval()
-    defog_model_list8.append(model)
+    defog_model_list7.append(model)
 
 th_len = 200000
 w = 0.7
@@ -1045,11 +959,11 @@ for p in tqdm(defog_list):
     test_loader = DataLoader(dataset=test_, 
                         batch_size=bs, 
                         shuffle = False)
-    for n,m in enumerate(defog_model_list8):
+    for n,m in enumerate(defog_model_list7):
         if n == 0:
-            pred = make_pred(test_loader,m) / len(defog_model_list8)
+            pred = make_pred(test_loader,m) / len(defog_model_list7)
         else:
-            pred += make_pred(test_loader,m) / len(defog_model_list8)
+            pred += make_pred(test_loader,m) / len(defog_model_list7)
     pred_list = []
     for i in range(batch):
         mask_ = pred_use_array[i]
